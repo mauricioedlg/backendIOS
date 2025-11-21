@@ -1,22 +1,23 @@
-from django.db import models
-
-# Create your models here.
-
-
+# core/models.py
 from django.db import models
 
 class Usuario(models.Model):
     id_usuario = models.AutoField(primary_key=True)
     correo = models.EmailField(max_length=100, unique=True)
-    contrasena = models.CharField(max_length=255)
+    contrasena = models.CharField(max_length=255)  # texto plano (según tu confirmación)
     nombre = models.CharField(max_length=100, blank=True, null=True)
     direccion = models.CharField(max_length=200, blank=True, null=True)
+
+    # Nuevos campos para integraciones bancarias y saldo
+    clabe = models.CharField(max_length=32, blank=True, null=True)
+    cuenta_bancaria = models.CharField(max_length=50, blank=True, null=True)
+    saldo = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+
     fecha_registro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "usuarios"   # 👈 aquí le dices que use tu tabla original
+        db_table = "usuarios"
         managed = False
-
 
 
 class Accion(models.Model):
@@ -31,7 +32,6 @@ class Accion(models.Model):
         managed = False
 
 
-
 class Portafolio(models.Model):
     id_portafolio = models.AutoField(primary_key=True)
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, db_column="id_usuario")
@@ -42,7 +42,6 @@ class Portafolio(models.Model):
     class Meta:
         db_table = "portafolio"
         managed = False
-
 
 
 class Transaccion(models.Model):
