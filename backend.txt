@@ -1,0 +1,686 @@
+
+backend django:
+
+
+- django---
+	   |---backend
+	   |  	      |--- .env
+	   |  	      |--- .gitignore
+	   |  	      |--- manage.py
+	   |  	      |--- Procfile
+	   |  	      |--- railway.toml
+	   |  	      |--- requirements.txt
+	   |  	      |--- core
+	   |          |        |--- admin.py
+           |	      |	       |--- apps.py
+	   |	      |	       |--- models.py
+	   |	      |	       |--- serializers.py
+	   |	      |        |--- test.py
+	   |	      |        |--- views.py
+	   |          |
+	   |          |--- backend   
+	   |          |        |---settings.py
+	   |          |        |---urls.py
+	   |          |         
+	   |          |--- .git
+	   |---venv
+
+
+
+https://backendios-production.up.railway.app/api/
+
+
+-- =========================
+-- Tabla de usuarios
+-- =========================
+CREATE TABLE usuarios (
+    id_usuario INT AUTO_INCREMENT PRIMARY KEY,
+    correo VARCHAR(100) NOT NULL UNIQUE,
+    contrasena VARCHAR(255) NOT NULL,
+    nombre VARCHAR(100),
+    direccion VARCHAR(200),
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =========================
+-- Tabla de acciones
+-- =========================
+CREATE TABLE acciones (
+    id_accion INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    precio DECIMAL(18,2) NOT NULL,
+    cambio_porcentual DECIMAL(5,2) NOT NULL,
+    fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =========================
+-- Tabla de portafolio
+-- =========================
+CREATE TABLE portafolio (
+    id_portafolio INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    id_accion INT NOT NULL,
+    porcentaje DECIMAL(5,2) NOT NULL,
+    monto_invertido DECIMAL(18,2) NOT NULL,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    FOREIGN KEY (id_accion) REFERENCES acciones(id_accion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =========================
+-- Tabla de transacciones
+-- =========================
+CREATE TABLE transacciones (
+    id_transaccion INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    descripcion VARCHAR(255) NOT NULL,
+    monto DECIMAL(18,2) NOT NULL,
+    fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+
+
+
+
+
+requirements,txt:
+
+
+Django==5.0.6
+djangorestframework==3.14.0
+PyMySQL==1.1.0
+python-dotenv==1.0.1
+gunicorn==21.2.0
+django-cors-headers==4.3.1
+
+
+
+settings.py:
+
+
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+import pymysql
+
+pymysql.install_as_MySQLdb()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Cargar variables .env
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+SECRET_KEY = os.getenv('SECRET_KEY', 'cambia-esta-clave-en-produccion')
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.railway.app',
+    'http://localhost',
+    'http://127.0.0.1',
+]
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+
+    'rest_framework',
+    'corsheaders',
+
+    'core',
+]
+
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'backend.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'backend.wsgi.application'
+
+# DATABASE Railway
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT', '3306'),
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
+        }
+    }
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+
+LANGUAGE_CODE = 'es-mx'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+
+# STATIC
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# CORS
+CORS_ALLOW_ALL_ORIGINS = True  # restringir en producción si quieres
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+
+
+
+
+urls.py:
+
+
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from core import views
+from django.shortcuts import redirect
+
+router = DefaultRouter()
+router.register(r'usuarios', views.UsuarioViewSet, basename='usuario')
+router.register(r'acciones', views.AccionViewSet, basename='accion')
+router.register(r'portafolios', views.PortafolioViewSet, basename='portafolio')
+router.register(r'transacciones', views.TransaccionViewSet, basename='transaccion')
+router.register(r'config-montos', views.ConfigMontoViewSet, basename='configmontos')
+
+urlpatterns = [
+    path('', lambda request: redirect('/api/')),     # Redirige la raíz a /api/
+    path('admin/', admin.site.urls),
+    path('api/', include(router.urls)),
+    # Endpoints de negocio
+    path('api/comprar/', views.comprar, name='comprar'),
+    path('api/vender/', views.vender, name='vender'),
+    path('api/depositar/', views.depositar, name='depositar'),
+    path('api/retirar/', views.retirar, name='retirar'),
+    path('api/usuarios/<int:pk>/actualizar/', views.actualizar_usuario, name='actualizar_usuario'),
+]
+
+
+
+models.py:
+
+
+from decimal import Decimal
+from django.db import models
+
+class Usuario(models.Model):
+    id_usuario = models.AutoField(primary_key=True)
+    correo = models.EmailField(max_length=100, unique=True)
+    contrasena = models.CharField(max_length=255)
+    nombre = models.CharField(max_length=100, blank=True, null=True)
+    direccion = models.CharField(max_length=200, blank=True, null=True)
+    clabe = models.CharField(max_length=30, blank=True, null=True)
+    cuenta_bancaria = models.CharField(max_length=50, blank=True, null=True)
+    saldo = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('1000.00'))
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "usuarios"
+        managed = False  # cambia a True si Django debe controlar tablas
+
+    def __str__(self):
+        return f"{self.nombre or self.correo} ({self.id_usuario})"
+
+
+class Accion(models.Model):
+    id_accion = models.AutoField(primary_key=True)
+    nombre = models.CharField(max_length=100)
+    precio = models.DecimalField(max_digits=18, decimal_places=2)
+    cambio_porcentual = models.DecimalField(max_digits=7, decimal_places=2)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "acciones"
+        managed = False
+
+    def __str__(self):
+        return f"{self.nombre} - ${self.precio}"
+
+
+class Portafolio(models.Model):
+    id_portafolio = models.AutoField(primary_key=True)
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, db_column="id_usuario")
+    accion = models.ForeignKey(Accion, on_delete=models.CASCADE, db_column="id_accion")
+    cantidad = models.IntegerField()  # cuántas acciones posee el usuario
+    precio_promedio = models.DecimalField(max_digits=18, decimal_places=4)  # precio promedio de compra
+    fecha_ultima_operacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "portafolio"
+        managed = False
+        unique_together = ('usuario', 'accion')
+
+    def __str__(self):
+        return f"{self.usuario} - {self.accion} x{self.cantidad}"
+
+
+class Transaccion(models.Model):
+    TIPO_CHOICES = [
+        ('DEPOSITO', 'Depósito'),
+        ('RETIRO', 'Retiro'),
+        ('COMPRA', 'Compra'),
+        ('VENTA', 'Venta'),
+    ]
+
+    id_transaccion = models.AutoField(primary_key=True)
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, db_column="id_usuario")
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    accion = models.ForeignKey(Accion, on_delete=models.SET_NULL, db_column="id_accion", null=True, blank=True)
+    cantidad = models.IntegerField(null=True, blank=True)  # cantidad de acciones (si aplica)
+    monto = models.DecimalField(max_digits=18, decimal_places=2)  # monto de la operación (pesos/moneda)
+    saldo_anterior = models.DecimalField(max_digits=18, decimal_places=2)
+    saldo_nuevo = models.DecimalField(max_digits=18, decimal_places=2)
+    descripcion = models.CharField(max_length=255, blank=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "transacciones"
+        managed = False
+
+    def __str__(self):
+        return f"{self.tipo} - {self.usuario} - {self.monto}"
+
+
+class ConfigMonto(models.Model):
+    """
+    Tabla para definir montos válidos de depósito/retiro que solo el backend/SQL puede editar.
+    Por ejemplo: id=1 => depositar 100, id=2 => depositar 500, etc.
+    """
+    id_config = models.AutoField(primary_key=True)
+    tipo = models.CharField(max_length=20)  # DEPOSITO o RETIRO
+    monto = models.DecimalField(max_digits=18, decimal_places=2)
+
+    class Meta:
+        db_table = "config_montos"
+        managed = False
+
+    def __str__(self):
+        return f"{self.tipo} - {self.monto}"
+
+
+serializers.py:
+
+
+from rest_framework import serializers
+from .models import Usuario, Accion, Portafolio, Transaccion, ConfigMonto
+
+class UsuarioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Usuario
+        fields = ['id_usuario', 'correo', 'nombre', 'direccion', 'clabe', 'cuenta_bancaria', 'saldo', 'fecha_registro']
+
+
+class AccionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Accion
+        fields = ['id_accion', 'nombre', 'precio', 'cambio_porcentual', 'fecha_actualizacion']
+
+
+class PortafolioSerializer(serializers.ModelSerializer):
+    accion = AccionSerializer(read_only=True)
+    id_accion = serializers.PrimaryKeyRelatedField(queryset=Accion.objects.all(), source='accion', write_only=True)
+
+    class Meta:
+        model = Portafolio
+        fields = ['id_portafolio', 'usuario', 'accion', 'id_accion', 'cantidad', 'precio_promedio', 'fecha_ultima_operacion']
+
+
+class TransaccionSerializer(serializers.ModelSerializer):
+    accion = AccionSerializer(read_only=True)
+    class Meta:
+        model = Transaccion
+        fields = ['id_transaccion', 'usuario', 'tipo', 'accion', 'cantidad', 'monto', 'saldo_anterior', 'saldo_nuevo', 'descripcion', 'fecha']
+
+
+class ConfigMontoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConfigMonto
+        fields = ['id_config', 'tipo', 'monto']
+
+
+
+views.py:
+
+
+from decimal import Decimal, ROUND_DOWN
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from rest_framework import viewsets, status
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+
+from .models import Usuario, Accion, Portafolio, Transaccion, ConfigMonto
+from .serializers import (UsuarioSerializer, AccionSerializer,
+                          PortafolioSerializer, TransaccionSerializer, ConfigMontoSerializer)
+
+
+# ViewSets CRUD básicos
+class UsuarioViewSet(viewsets.ModelViewSet):
+    queryset = Usuario.objects.all()
+    serializer_class = UsuarioSerializer
+    permission_classes = [AllowAny]
+
+
+class AccionViewSet(viewsets.ModelViewSet):
+    queryset = Accion.objects.all()
+    serializer_class = AccionSerializer
+    permission_classes = [AllowAny]
+
+
+class PortafolioViewSet(viewsets.ModelViewSet):
+    queryset = Portafolio.objects.select_related('accion', 'usuario').all()
+    serializer_class = PortafolioSerializer
+    permission_classes = [AllowAny]
+
+
+class TransaccionViewSet(viewsets.ModelViewSet):
+    queryset = Transaccion.objects.select_related('accion', 'usuario').all().order_by('-fecha')
+    serializer_class = TransaccionSerializer
+    permission_classes = [AllowAny]
+
+
+class ConfigMontoViewSet(viewsets.ModelViewSet):
+    queryset = ConfigMonto.objects.all()
+    serializer_class = ConfigMontoSerializer
+    permission_classes = [AllowAny]
+
+
+# ===============================
+# Endpoints de negocio: comprar, vender, depositar, retirar
+# ===============================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def comprar(request):
+    """
+    POST /api/comprar/
+    body: { "id_usuario": 1, "id_accion": 2, "cantidad": 10 }
+    """
+    data = request.data
+    try:
+        id_usuario = int(data.get('id_usuario'))
+        id_accion = int(data.get('id_accion'))
+        cantidad = int(data.get('cantidad'))
+    except Exception:
+        return Response({"detail": "Parámetros inválidos"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if cantidad <= 0:
+        return Response({"detail": "La cantidad debe ser mayor a 0"}, status=status.HTTP_400_BAD_REQUEST)
+
+    usuario = get_object_or_404(Usuario, pk=id_usuario)
+    accion = get_object_or_404(Accion, pk=id_accion)
+
+    monto_total = (Decimal(cantidad) * accion.precio).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+
+    with transaction.atomic():
+        # Refrescar saldo desde DB
+        usuario = Usuario.objects.select_for_update().get(pk=usuario.id_usuario)
+        saldo_anterior = usuario.saldo
+
+        if saldo_anterior < monto_total:
+            return Response({"detail": "Saldo insuficiente", "saldo_actual": f"{saldo_anterior}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Actualizar/crear portafolio
+        portafolio, created = Portafolio.objects.select_for_update().get_or_create(
+            usuario=usuario,
+            accion=accion,
+            defaults={'cantidad': cantidad, 'precio_promedio': accion.precio}
+        )
+
+        if not created:
+            # calcular nuevo precio promedio ponderado
+            total_acciones_previas = portafolio.cantidad
+            precio_prom_prev = portafolio.precio_promedio
+            nuevo_total_acciones = total_acciones_previas + cantidad
+            # nuevo promedio = (previas*promedio + cantidad*precio_actual) / nuevo_total
+            nuevo_promedio = ((Decimal(total_acciones_previas) * precio_prom_prev) + (Decimal(cantidad) * accion.precio)) / Decimal(nuevo_total_acciones)
+            portafolio.cantidad = nuevo_total_acciones
+            portafolio.precio_promedio = nuevo_promedio.quantize(Decimal('0.0001'), rounding=ROUND_DOWN)
+            portafolio.save()
+        else:
+            portafolio.save()
+
+        # Actualizar saldo usuario
+        usuario.saldo = (saldo_anterior - monto_total).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+        usuario.save()
+
+        # Crear transaccion
+        trans = Transaccion.objects.create(
+            usuario=usuario,
+            tipo='COMPRA',
+            accion=accion,
+            cantidad=cantidad,
+            monto=monto_total,
+            saldo_anterior=saldo_anterior,
+            saldo_nuevo=usuario.saldo,
+            descripcion=f"Compra {accion.nombre} x{cantidad} a ${accion.precio}"
+        )
+
+    return Response({
+        "detail": "Compra realizada",
+        "monto_total": f"{monto_total}",
+        "saldo_anterior": f"{saldo_anterior}",
+        "saldo_nuevo": f"{usuario.saldo}",
+        "portafolio": PortafolioSerializer(portafolio).data,
+        "transaccion": TransaccionSerializer(trans).data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def vender(request):
+    """
+    POST /api/vender/
+    body: { "id_usuario": 1, "id_accion": 2, "cantidad": 5 }
+    """
+    data = request.data
+    try:
+        id_usuario = int(data.get('id_usuario'))
+        id_accion = int(data.get('id_accion'))
+        cantidad = int(data.get('cantidad'))
+    except Exception:
+        return Response({"detail": "Parámetros inválidos"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if cantidad <= 0:
+        return Response({"detail": "La cantidad debe ser mayor a 0"}, status=status.HTTP_400_BAD_REQUEST)
+
+    usuario = get_object_or_404(Usuario, pk=id_usuario)
+    accion = get_object_or_404(Accion, pk=id_accion)
+
+    with transaction.atomic():
+        usuario = Usuario.objects.select_for_update().get(pk=usuario.id_usuario)
+        saldo_anterior = usuario.saldo
+
+        # Obtener portafolio
+        try:
+            portafolio = Portafolio.objects.select_for_update().get(usuario=usuario, accion=accion)
+        except Portafolio.DoesNotExist:
+            return Response({"detail": "No posee esa acción en el portafolio"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if portafolio.cantidad < cantidad:
+            return Response({"detail": "Cantidad a vender mayor a la poseída", "posee": portafolio.cantidad}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Monto obtenido por venta
+        monto_obtenido = (Decimal(cantidad) * accion.precio).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+
+        # Actualizar portafolio
+        portafolio.cantidad = portafolio.cantidad - cantidad
+        if portafolio.cantidad == 0:
+            portafolio.delete()
+            portafolio_serialized = None
+        else:
+            portafolio.save()
+            portafolio_serialized = PortafolioSerializer(portafolio).data
+
+        # Actualizar saldo usuario
+        usuario.saldo = (saldo_anterior + monto_obtenido).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+        usuario.save()
+
+        # Crear transaccion
+        trans = Transaccion.objects.create(
+            usuario=usuario,
+            tipo='VENTA',
+            accion=accion,
+            cantidad=cantidad,
+            monto=monto_obtenido,
+            saldo_anterior=saldo_anterior,
+            saldo_nuevo=usuario.saldo,
+            descripcion=f"Venta {accion.nombre} x{cantidad} a ${accion.precio}"
+        )
+
+    return Response({
+        "detail": "Venta realizada",
+        "monto_obtenido": f"{monto_obtenido}",
+        "saldo_anterior": f"{saldo_anterior}",
+        "saldo_nuevo": f"{usuario.saldo}",
+        "portafolio": portafolio_serialized,
+        "transaccion": TransaccionSerializer(trans).data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def depositar(request):
+    """
+    POST /api/depositar/
+    body: { "id_usuario": 1, "id_config": 1 }  -> el monto será tomado desde ConfigMonto (SQL)
+    """
+    data = request.data
+    try:
+        id_usuario = int(data.get('id_usuario'))
+        id_config = int(data.get('id_config'))
+    except Exception:
+        return Response({"detail": "Parámetros inválidos"}, status=status.HTTP_400_BAD_REQUEST)
+
+    usuario = get_object_or_404(Usuario, pk=id_usuario)
+    config = get_object_or_404(ConfigMonto, pk=id_config, tipo__iexact='DEPOSITO')
+
+    with transaction.atomic():
+        usuario = Usuario.objects.select_for_update().get(pk=usuario.id_usuario)
+        saldo_anterior = usuario.saldo
+        monto = config.monto.quantize(Decimal('0.01'))
+        usuario.saldo = (saldo_anterior + monto).quantize(Decimal('0.01'))
+        usuario.save()
+
+        trans = Transaccion.objects.create(
+            usuario=usuario,
+            tipo='DEPOSITO',
+            accion=None,
+            cantidad=None,
+            monto=monto,
+            saldo_anterior=saldo_anterior,
+            saldo_nuevo=usuario.saldo,
+            descripcion=f"Depósito automático de ${monto} (config #{config.id_config})"
+        )
+
+    return Response({
+        "detail": "Depósito realizado",
+        "monto": f"{monto}",
+        "saldo_anterior": f"{saldo_anterior}",
+        "saldo_nuevo": f"{usuario.saldo}",
+        "transaccion": TransaccionSerializer(trans).data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def retirar(request):
+    """
+    POST /api/retirar/
+    body: { "id_usuario": 1, "id_config": 2 } -> monto tomado desde ConfigMonto (SQL)
+    """
+    data = request.data
+    try:
+        id_usuario = int(data.get('id_usuario'))
+        id_config = int(data.get('id_config'))
+    except Exception:
+        return Response({"detail": "Parámetros inválidos"}, status=status.HTTP_400_BAD_REQUEST)
+
+    usuario = get_object_or_404(Usuario, pk=id_usuario)
+    config = get_object_or_404(ConfigMonto, pk=id_config, tipo__iexact='RETIRO')
+
+    with transaction.atomic():
+        usuario = Usuario.objects.select_for_update().get(pk=usuario.id_usuario)
+        saldo_anterior = usuario.saldo
+        monto = config.monto.quantize(Decimal('0.01'))
+
+        if saldo_anterior < monto:
+            return Response({"detail": "Saldo insuficiente para retiro", "saldo_actual": f"{saldo_anterior}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        usuario.saldo = (saldo_anterior - monto).quantize(Decimal('0.01'))
+        usuario.save()
+
+        trans = Transaccion.objects.create(
+            usuario=usuario,
+            tipo='RETIRO',
+            accion=None,
+            cantidad=None,
+            monto=monto,
+            saldo_anterior=saldo_anterior,
+            saldo_nuevo=usuario.saldo,
+            descripcion=f"Retiro automático de ${monto} (config #{config.id_config})"
+        )
+
+    return Response({
+        "detail": "Retiro realizado",
+        "monto": f"{monto}",
+        "saldo_anterior": f"{saldo_anterior}",
+        "saldo_nuevo": f"{usuario.saldo}",
+        "transaccion": TransaccionSerializer(trans).data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['PUT'])
+@permission_classes([AllowAny])
+def actualizar_usuario(request, pk):
+    """
+    PUT /api/usuarios/<pk>/actualizar/
+    Body: { "nombre": "...", "direccion":"...", "clabe": "...", "cuenta_bancaria":"..." }
+    """
+    usuario = get_object_or_404(Usuario, pk=pk)
+    data = request.data
+    serializer = UsuarioSerializer(instance=usuario, data=data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"detail": "Usuario actualizado", "usuario": serializer.data})
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
